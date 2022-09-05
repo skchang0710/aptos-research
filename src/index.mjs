@@ -25,15 +25,15 @@ async function transfer(authAccount, senderAddr, receiverAddr, amount) {
   const chainId = await client.getChainId();
   const { sequence_number } = await client.getAccount(senderAddr);
   const payload = getAccountTransferPayload(receiverAddr, amount);
-  const bcsTxn = getSignedTransaction(authAccount, senderAddr, sequence_number, chainId, payload);
-  await sendTx(bcsTxn);
+  const { signedTx } = getSignedTransaction(authAccount, senderAddr, sequence_number, chainId, payload);
+  await sendTx(signedTx);
 }
 
 async function rotateKey(address, fromAccount, toAccount) {
   try {
     const chainId = await client.getChainId();
-    const bcsTxn = await rotateAuthKeyEd25519(address, fromAccount, toAccount, chainId);
-    await sendTx(bcsTxn);
+    const { signedTx } = await rotateAuthKeyEd25519(address, fromAccount, toAccount, chainId);
+    await sendTx(signedTx);
   } catch (error) {
     console.log('\n*** Key Rotation Failure ***');
     console.log(error);

@@ -3,7 +3,8 @@
 // https://github.com/aptos-labs/aptos-core/blob/main/ecosystem/typescript/sdk/examples/typescript/bcs_transaction.ts
 import { AptosClient, TxnBuilderTypes, BCS } from "aptos";
 import { getAccounts } from './account.mjs';
-import { format } from '../formatter/signedMessage.mjs';
+import { format as rawTxFormat } from '../formatter/signingMessage.mjs';
+import { format as signedTxFormat } from '../formatter/signedMessage.mjs';
 
 if (process.argv[1].includes('utils/tx.mjs')) {
   try {
@@ -18,7 +19,15 @@ if (process.argv[1].includes('utils/tx.mjs')) {
 
     // const payload = getCoinTransferPayload(account_with_to_address, amount);
     const payload = getAccountTransferPayload(receiverAddr, amount);
-    getSignedTransaction(authAccount, senderAddr, sequence, chainId, payload);
+    const { rawTx, signedTx } = getSignedTransaction(authAccount, senderAddr, sequence, chainId, payload);
+
+    const rawTxHex = Buffer.from(BCS.bcsToBytes(rawTx)).toString('hex');
+    const signedTxHex = Buffer.from(signedTx).toString('hex');
+
+    console.log('\nrawTxHex :', rawTxHex);
+    console.log(rawTxFormat(rawTxHex));
+    console.log('\nsignedTxHex :', signedTxHex);
+    console.log(signedTxFormat(signedTxHex));
 
   } catch (err) {
     console.log('err :', err);
@@ -87,7 +96,7 @@ export function getAccountTransferPayload(receiverAddr, amount) {
 // -------- -------- -------- Construct Transaction -------- -------- -------- //
 
 export function getSignedTransaction(authAccount, senderAddr, sequence, chainId, payload) {
-  const rawTxn = new TxnBuilderTypes.RawTransaction(
+  const rawTx = new TxnBuilderTypes.RawTransaction(
     TxnBuilderTypes.AccountAddress.fromHex(senderAddr),
     BigInt(sequence),
     payload,
@@ -96,9 +105,6 @@ export function getSignedTransaction(authAccount, senderAddr, sequence, chainId,
     BigInt(Math.floor(Date.now() / 1000) + 10), // expiration
     new TxnBuilderTypes.ChainId(chainId),       // chain id
   );
-  const bcsTxn = AptosClient.generateBCSTransaction(authAccount, rawTxn);
-  const signedTx = Buffer.from(bcsTxn).toString('hex');
-  console.log('\nsignedTx :', signedTx);
-  // console.log(format(signedTx));
-  return bcsTxn;
+  const signedTx = AptosClient.generateBCSTransaction(authAccount, rawTx);
+  return { rawTx, signedTx };
 }
