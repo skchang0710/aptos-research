@@ -5,6 +5,11 @@ import { AptosClient, TxnBuilderTypes, BCS } from "aptos";
 import { getAccounts } from './account.mjs';
 import { format as rawTxFormat } from '../formatter/signingMessage.mjs';
 import { format as signedTxFormat } from '../formatter/signedMessage.mjs';
+import SHA3 from "js-sha3";
+const { sha3_256 } = SHA3;
+
+const RAW_TRANSACTION_SALT = "APTOS::RawTransaction";
+const RAW_TRANSACTION_WITH_DATA_SALT = "APTOS::RawTransactionWithData";
 
 if (process.argv[1].includes('utils/tx.mjs')) {
   try {
@@ -17,15 +22,18 @@ if (process.argv[1].includes('utils/tx.mjs')) {
     const sequence = 0;
     const chainId = 25;
 
-    // const payload = getCoinTransferPayload(account_with_to_address, amount);
     const payload = getAccountTransferPayload(receiverAddr, amount);
     const { rawTx, signedTx } = getSignedTransaction(authAccount, senderAddr, sequence, chainId, payload);
 
     const rawTxHex = Buffer.from(BCS.bcsToBytes(rawTx)).toString('hex');
     const signedTxHex = Buffer.from(signedTx).toString('hex');
 
+    // https://github.com/aptos-labs/aptos-core/blob/main/ecosystem/typescript/sdk/src/transaction_builder/builder.ts#L67
+    const prefixArray = new Uint8Array(sha3_256.create().update(RAW_TRANSACTION_SALT).arrayBuffer());
+    const prefix = Buffer.from(prefixArray).toString('hex');
     console.log('\nrawTxHex :', rawTxHex);
-    console.log(rawTxFormat(rawTxHex));
+    console.log(rawTxFormat(prefix+rawTxHex));
+
     console.log('\nsignedTxHex :', signedTxHex);
     console.log(signedTxFormat(signedTxHex));
 
