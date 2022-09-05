@@ -1,0 +1,272 @@
+
+BCS : https://github.com/diem/bcs#detailed-specifications
+- BCS is not a self-describing format. As such, in order to deserialize a message, one must know the message type and layout ahead of time.
+- In BCS, the result of decoding ULEB128 bytes is required to fit into a 32-bit unsigned integer and be in canonical form.
+  (即使用 ULEB128 encoding 還是有每一單位 32-bit uint 的上限)
+- Fixed and Variable Length Sequences
+  (固定長度的 Sequence 由每個都長度一樣的 element 串起來，動態長度的則可以在每個 element 前面加上 uleb128 的長度表示)
+
+APTOS-DOC : https://aptos.dev/guides/creating-a-signed-transaction/#signing-message
+- Signing message = prefix_bytes | bcs_bytes_of_raw_transaction
+
+
+Code
+
+1.generateBCSTransaction > TransactionBuilderEd25519
+- https://github.com/aptos-labs/aptos-core/blob/main/ecosystem/typescript/sdk/src/aptos_client.ts#L165
+
+2. TransactionBuilderEd25519 > sign > rawToSigned > TransactionBuilder.getSigningMessage(rawTxn);
+- https://github.com/aptos-labs/aptos-core/blob/main/ecosystem/typescript/sdk/src/transaction_builder/builder.ts#L87
+
+  type AnyRawTransaction = RawTransaction | MultiAgentRawTransaction;
+  static getSigningMessage(rawTxn: AnyRawTransaction): SigningMessage {
+    const hash = SHA3.sha3_256.create();
+    const RAW_TRANSACTION_SALT = "APTOS::RawTransaction";
+    hash.update(Buffer.from(RAW_TRANSACTION_SALT));
+    const prefix = new Uint8Array(hash.arrayBuffer());
+    return Buffer.from([...prefix, ...bcsToBytes(rawTxn)]);
+  }
+
+3.RawTransaction : (TransactionPayload 新舊版差異很大，參考新版)
+- https://github.com/aptos-labs/aptos-core/blob/0817alden-smt-usage/ecosystem/typescript/sdk/src/transaction_builder/aptos_types/transaction.ts#L360
+
+  class RawTransaction {
+    constructor(
+      public readonly sender: AccountAddress,
+      public readonly sequence_number: Uint64,
+      public readonly payload: TransactionPayload,
+      public readonly max_gas_amount: Uint64,
+      public readonly gas_unit_price: Uint64,
+      public readonly expiration_timestamp_secs: Uint64,
+      public readonly chain_id: ChainId,
+    ) {}
+    serialize(serializer: Serializer): void {
+      this.sender.serialize(serializer);
+      serializer.serializeU64(this.sequence_number);
+      this.payload.serialize(serializer);
+      serializer.serializeU64(this.max_gas_amount);
+      serializer.serializeU64(this.gas_unit_price);
+      serializer.serializeU64(this.expiration_timestamp_secs);
+      this.chain_id.serialize(serializer);
+    }
+
+  -------- TransactionPayload > TransactionPayloadScriptFunction > ScriptFunction --------
+
+  abstract class TransactionPayload {
+    abstract serialize(serializer: Serializer): void;
+    static deserialize(deserializer: Deserializer): TransactionPayload {
+      const index = deserializer.deserializeUleb128AsU32();
+      switch (index) {
+        case 0:
+          return TransactionPayloadWriteSet.load(deserializer);
+        case 1:
+          return TransactionPayloadScript.load(deserializer);
+        case 2:
+          return TransactionPayloadModuleBundle.load(deserializer);
+        case 3:
+          return TransactionPayloadScriptFunction.load(deserializer);
+        default:
+          throw new Error(`Unknown variant index for TransactionPayload: ${index}`);
+      }
+    }
+
+  class TransactionPayloadScriptFunction extends TransactionPayload {
+    constructor(public readonly value: ScriptFunction) {
+      super();
+    }
+    serialize(serializer: Serializer): void {
+      serializer.serializeU32AsUleb128(3);
+      this.value.serialize(serializer);
+    }
+    static load(deserializer: Deserializer): TransactionPayloadScriptFunction {
+      const value = ScriptFunction.deserialize(deserializer);
+      return new TransactionPayloadScriptFunction(value);
+    }
+
+  class ScriptFunction {
+    constructor(
+      public readonly module_name: ModuleId,
+      public readonly function_name: Identifier,
+      public readonly ty_args: Seq<TypeTag>,
+      public readonly args: Seq<Bytes>,
+    ) {}
+    static deserialize(deserializer: Deserializer): ScriptFunction {
+      const module_name = ModuleId.deserialize(deserializer);
+      const function_name = Identifier.deserialize(deserializer);
+      const ty_args = deserializeVector(deserializer, TypeTag);
+      const length = deserializer.deserializeUleb128AsU32();
+      const list: Seq<Bytes> = [];
+      for (let i = 0; i < length; i += 1) {
+        list.push(deserializer.deserializeBytes());
+      }
+      const args = list;
+      return new ScriptFunction(module_name, function_name, ty_args, args);
+    }
+
+  class ModuleId {
+    serialize(serializer: Serializer): void {
+      this.address.serialize(serializer);
+      this.name.serialize(serializer);
+    }
+
+- https://github.com/aptos-labs/aptos-core/blob/0817alden-smt-usage/ecosystem/typescript/sdk/src/transaction_builder/aptos_types/type_tag.ts
+
+  abstract class TypeTag {
+    abstract serialize(serializer: Serializer): void;
+  
+    static deserialize(deserializer: Deserializer): TypeTag {
+      const index = deserializer.deserializeUleb128AsU32();
+      switch (index) {
+        case 0:
+          return TypeTagBool.load(deserializer);
+        case 1:
+          return TypeTagU8.load(deserializer);
+        case 2:
+          return TypeTagU64.load(deserializer);
+        case 3:
+          return TypeTagU128.load(deserializer);
+        case 4:
+          return TypeTagAddress.load(deserializer);
+        case 5:
+          return TypeTagSigner.load(deserializer);
+        case 6:
+          return TypeTagVector.load(deserializer);
+        case 7:
+          return TypeTagStruct.load(deserializer);
+        default:
+          throw new Error(`Unknown variant index for TypeTag: ${index}`);
+      }
+    }
+  }
+
+  class TypeTagStruct extends TypeTag {
+    constructor(public readonly value: StructTag) {
+      super();
+    }
+    serialize(serializer: Serializer): void {
+      serializer.serializeU32AsUleb128(7);
+      this.value.serialize(serializer);
+    }
+
+  class StructTag {
+    constructor(
+      public readonly address: AccountAddress,
+      public readonly module_name: Identifier,
+      public readonly name: Identifier,
+      public readonly type_args: Seq<TypeTag>,
+    ) {}
+    serialize(serializer: Serializer): void {
+      this.address.serialize(serializer);
+      this.module_name.serialize(serializer);
+      this.name.serialize(serializer);
+      serializeVector<TypeTag>(this.type_args, serializer);
+    }
+
+4. Identifier
+- https://github.com/aptos-labs/aptos-core/blob/0817alden-smt-usage/ecosystem/typescript/sdk/src/transaction_builder/aptos_types/identifier.ts
+
+  class Identifier {
+    constructor(public value: string) {}
+    public serialize(serializer: Serializer): void {
+      serializer.serializeStr(this.value);
+    }
+
+5. bcsToBytes, serializeVector
+-  https://github.com/aptos-labs/aptos-core/blob/main/ecosystem/typescript/sdk/src/transaction_builder/bcs/helper.ts#L48
+
+   function serializeVector<T extends Serializable>(value: Seq<T>, serializer: Serializer): void {
+     serializer.serializeU32AsUleb128(value.length);
+     value.forEach((item: T) => {
+       item.serialize(serializer);
+     });
+   }
+   function deserializeVector(deserializer: Deserializer, cls: any): any[] {
+     const length = deserializer.deserializeUleb128AsU32();
+     const list: Seq<typeof cls> = [];
+     for (let i = 0; i < length; i += 1) {
+       list.push(cls.deserialize(deserializer));
+     }
+     return list;
+   }
+
+6. Serializer { serializeU32, serializeU64, serializeBytes, serializeStr, serializeU32AsUleb128 }
+-  https://github.com/aptos-labs/aptos-core/blob/main/ecosystem/typescript/sdk/src/transaction_builder/bcs/serializer.ts#L180
+
+   class Serializer {
+     private serializeWithFunction(
+       fn: (byteOffset: number, value: number, littleEndian?: boolean) => void,
+       bytesLength: number,
+       value: number,
+     ) {
+       this.ensureBufferWillHandleSize(bytesLength);
+       const dv = new DataView(this.buffer, this.offset);
+       fn.apply(dv, [0, value, true]);
+       this.offset += bytesLength;
+     }
+     serializeU32(value: Uint32): void {
+       this.serializeWithFunction(DataView.prototype.setUint32, 4, value);
+     }
+     serializeU64(value: AnyNumber): void {
+       const low = BigInt(value.toString()) & BigInt(MAX_U32_NUMBER);
+       const high = BigInt(value.toString()) >> BigInt(32);
+
+       // write little endian number
+       this.serializeU32(Number(low));
+       this.serializeU32(Number(high));
+     }
+     serializeBytes(value: Bytes): void {
+       this.serializeU32AsUleb128(value.length);
+       this.serialize(value);
+     }
+     serializeStr(value: string): void {
+       const textEncoder = new TextEncoder();
+       this.serializeBytes(textEncoder.encode(value));
+     }
+     serializeU32AsUleb128(val: Uint32): void {
+       let value = val;
+       const valueArray = [];
+       while (value >>> 7 !== 0) {
+         valueArray.push((value & 0x7f) | 0x80);
+         value >>>= 7;
+       }
+       valueArray.push(value);
+       this.serialize(new Uint8Array(valueArray));
+     }
+
+- https://github.com/aptos-labs/aptos-core/blob/main/ecosystem/typescript/sdk/src/transaction_builder/bcs/deserializer.ts
+
+   class Deserializer {
+     deserializeBytes(): Bytes {
+       const len = this.deserializeUleb128AsU32();
+       return new Uint8Array(this.read(len));
+     }
+
+
+
+/* Supplements
+
+class SignedTransaction {
+  constructor(public readonly raw_txn: RawTransaction, public readonly authenticator: TransactionAuthenticator) {}
+  serialize(serializer: Serializer): void {
+    this.raw_txn.serialize(serializer);
+    this.authenticator.serialize(serializer);
+  }
+
+--------
+
+class AccountAddress {
+  static readonly LENGTH: number = 32;
+  readonly address: Bytes;
+  constructor(address: Bytes) {
+    if (address.length !== AccountAddress.LENGTH) {
+      throw new Error("Expected address of length 32");
+    }
+    this.address = address;
+  }
+
+--------
+
+class ChainId {
+  constructor(public readonly value: Uint8)
+
+--------
