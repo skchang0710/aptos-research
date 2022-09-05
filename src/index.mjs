@@ -17,7 +17,7 @@ async function accountBalance(accountAddress) {
     }
     return parseInt((resource.data)["coin"]["value"]);
   } catch (error) {
-    return error.error_code;
+    return 'Not Exist';
   }
 }
 
@@ -42,7 +42,7 @@ async function rotateKey(address, fromAccount, toAccount) {
 
 async function sendTx(bcsTxn) {
   const pendingTxn = await client.submitSignedBCSTransaction(bcsTxn);
-  console.log('\npendingTxn :', pendingTxn);
+  // console.log('\npendingTxn :', pendingTxn);
   await client.waitForTransaction(pendingTxn.hash);
 }
 
@@ -63,7 +63,7 @@ async function showBalances(alice, bob, charlie) {
     await showBalances(alice, bob, charlie);
 
     // ** test tool 2 : transfer
-    await transfer(alice, alice.address(), bob.address(), 1000); // fromAuth, fromAddr, toAddr, amount
+    await transfer(alice, alice.address(), bob.address(), 2000); // fromAuth, fromAddr, toAddr, amount
 
     // ** test tool 3 : rotateKey
     await rotateKey(alice.address(), alice, bob); // address, fromAuth, toAuth

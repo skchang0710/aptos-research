@@ -97,9 +97,6 @@ async function lookupAddressByAuthKey(authKey) {
 export async function rotateAuthKeyEd25519(address, fromAccount, toAccount) {
   const chainId = await client.getChainId();
   const { sequence_number, authentication_key } = await client.getAccount(address);
-  console.log('from address  :', address.hexString);
-  console.log('from auth key :', fromAccount.authKey().hexString);
-  console.log('to auth key   :', toAccount.authKey().hexString);
 
   if (fromAccount.authKey().hexString !== authentication_key) {
     throw new Error(`invalid authKey! should be : ${authentication_key}`);
@@ -108,7 +105,6 @@ export async function rotateAuthKeyEd25519(address, fromAccount, toAccount) {
   let sequence = parseInt(sequence_number).toString(16);
   sequence = (sequence.length%2 ? '0' : '') + sequence;
   sequence = Buffer.from(sequence,'hex').reverse().toString('hex').padEnd(16,'0');
-  console.log('sequence      :', sequence);
 
   const challengeHex =
     '0000000000000000000000000000000000000000000000000000000000000001' +
@@ -119,7 +115,7 @@ export async function rotateAuthKeyEd25519(address, fromAccount, toAccount) {
     fromAccount.authKey().hexString.slice(2) +
     '20' + toAccount.pubKey().hexString.slice(2);
 
-  console.log('challengeHex  :', challengeHex);
+  // console.log('\nchallengeHex  :', challengeHex);
 
   const proofByFromAccount = fromAccount.signHexString(challengeHex);
   const proofByToAccount = toAccount.signHexString(challengeHex);

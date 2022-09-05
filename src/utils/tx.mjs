@@ -53,7 +53,7 @@ export function getCoinTransferPayload(receiverAddr, amount) {
       [BCS.bcsToBytes(TxnBuilderTypes.AccountAddress.fromHex(receiverAddr)), BCS.bcsSerializeUint64(amount)],
     ),
   );
-  console.log('\npayload :', payload);
+  // console.log('\npayload :', payload);
   return payload;
 }
 
@@ -80,7 +80,7 @@ export function getAccountTransferPayload(receiverAddr, amount) {
       [BCS.bcsToBytes(TxnBuilderTypes.AccountAddress.fromHex(receiverAddr)), BCS.bcsSerializeUint64(amount)],
     ),
   );
-  console.log('\npayload :', payload);
+  // console.log('\npayload :', payload);
   return payload;
 }
 
@@ -98,7 +98,7 @@ export function getSignedTransaction(authAccount, senderAddr, sequence, chainId,
   );
   const bcsTxn = AptosClient.generateBCSTransaction(authAccount, rawTxn);
   const signedTx = Buffer.from(bcsTxn).toString('hex');
-  console.log('signedTx :', signedTx);
-  console.log(format(signedTx));
+  console.log('\nsignedTx :', signedTx);
+  // console.log(format(signedTx));
   return bcsTxn;
 }
