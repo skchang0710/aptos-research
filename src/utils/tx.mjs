@@ -103,13 +103,13 @@ export function getAccountTransferPayload(receiverAddr, amount) {
 
 // -------- -------- -------- Construct Transaction -------- -------- -------- //
 
-export function getSignedTransaction(authAccount, senderAddr, sequence, chainId, payload) {
+export function getSignedTransaction(authAccount, senderAddr, sequence, chainId, payload, gasLimit=1000, gasPrice=1) {
   const rawTx = new TxnBuilderTypes.RawTransaction(
     TxnBuilderTypes.AccountAddress.fromHex(senderAddr),
     BigInt(sequence),
     payload,
-    1000n, // gas limit
-    1n,    // gas price
+    gasLimit,
+    gasPrice,
     BigInt(Math.floor(Date.now() / 1000) + 10), // expiration
     new TxnBuilderTypes.ChainId(chainId),       // chain id
   );
