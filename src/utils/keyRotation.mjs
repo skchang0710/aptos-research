@@ -27,7 +27,7 @@ if (process.argv[1].includes('utils/keyRotation.mjs')) {
 export async function checkKeyRotation(account) {
   const address = account.address();
   const originalAuth = address.hexString;
-  const { currentAuth } = await api.getAccount(address);
+  const { currentAuth } = await api.getSequenceAndAuthKey(address);
   const rotatedAddr = await api.lookupAddressByAuthKey(originalAuth);
 
   console.log('originalAuth :', originalAuth);
@@ -70,7 +70,7 @@ export async function checkKeyRotation(account) {
 
 export async function rotateAuthKeyEd25519(address, fromAccount, toAccount) {
   const chainId = await api.getChainId();
-  const { sequence, currentAuth } = await api.getAccount(address);
+  const { sequence, currentAuth } = await api.getSequenceAndAuthKey(address);
 
   if (fromAccount.authKey().hexString !== currentAuth) {
     throw new Error(`invalid authKey! should be : ${currentAuth}`);

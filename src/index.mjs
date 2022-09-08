@@ -5,7 +5,7 @@ import { getAccountTransferPayload, getSignedTransaction } from './utils/tx.mjs'
 
 async function transfer(authAccount, senderAddr, receiverAddr, amount) {
   const chainId = await api.getChainId();
-  const { sequence } = await api.getAccount(senderAddr);
+  const { sequence } = await api.getSequenceAndAuthKey(senderAddr);
   const payload = getAccountTransferPayload(receiverAddr, amount);
   const { signedTx } = getSignedTransaction(authAccount, senderAddr, sequence, chainId, payload);
   await api.sendTx(signedTx);
