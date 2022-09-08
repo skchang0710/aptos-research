@@ -1,10 +1,8 @@
 // https://github.com/aptos-labs/aptos-core/pull/3577/files
-import { AptosAccount, AptosClient, TxnBuilderTypes, BCS } from "aptos";
+import { TxnBuilderTypes, BCS } from "aptos";
 import { getSignedTransaction } from './tx.mjs';
 import { getAccounts } from './account.mjs';
-
-const NODE_URL = "https://fullnode.devnet.aptoslabs.com";
-const client = new AptosClient(NODE_URL);
+import * as api from './api.mjs';
 
 if (process.argv[1].includes('utils/keyRotation.mjs')) {
   try {
@@ -29,8 +27,8 @@ if (process.argv[1].includes('utils/keyRotation.mjs')) {
 export async function checkKeyRotation(account) {
   const address = account.address();
   const originalAuth = address.hexString;
-  const currentAuth = await getAuthKeyByAddress(address);
-  const rotatedAddr = await lookupAddressByAuthKey(originalAuth);
+  const { currentAuth } = await api.getAccount(address);
+  const rotatedAddr = await api.lookupAddressByAuthKey(originalAuth);
 
   console.log('originalAuth :', originalAuth);
   console.log('currentAuth  :', currentAuth);
@@ -65,52 +63,28 @@ export async function checkKeyRotation(account) {
   console.log('Result       :', result);
 }
 
-async function getAuthKeyByAddress(address) {
-  try {
-    const { authentication_key } = await client.getAccount(address);
-    return authentication_key;
-  } catch (error) {
-    return '';
-  }
-}
-
-async function lookupAddressByAuthKey(authKey) {
-  try {
-    const resource = await client.getAccountResource('0x1', "0x1::account::OriginatingAddress");
-    const { handle } = resource.data.address_map;
-    const origAddress = await client.getTableItem(handle, {
-      key_type: "address",
-      value_type: "address",
-      key: authKey,
-    });
-    return origAddress;
-  } catch (error) {
-    return '';
-  }
-}
-
 // -------- -------- -------- Rotate Auth Key Ed25519 -------- -------- -------- //
 //
 // https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/account.move#L197
 // https://github.com/aptos-labs/aptos-core/pull/3577/files#diff-821112f883e29b9e6a3d25b95cb8a9f638dfd44930f51fd727a42aa2f0fdae6aR689
 
 export async function rotateAuthKeyEd25519(address, fromAccount, toAccount) {
-  const chainId = await client.getChainId();
-  const { sequence_number, authentication_key } = await client.getAccount(address);
+  const chainId = await api.getChainId();
+  const { sequence, currentAuth } = await api.getAccount(address);
 
-  if (fromAccount.authKey().hexString !== authentication_key) {
-    throw new Error(`invalid authKey! should be : ${authentication_key}`);
+  if (fromAccount.authKey().hexString !== currentAuth) {
+    throw new Error(`invalid authKey! should be : ${currentAuth}`);
   }
 
-  let sequence = parseInt(sequence_number).toString(16);
-  sequence = (sequence.length%2 ? '0' : '') + sequence;
-  sequence = Buffer.from(sequence,'hex').reverse().toString('hex').padEnd(16,'0');
+  let sequenceHex = parseInt(sequence).toString(16);
+  sequenceHex = (sequenceHex.length%2 ? '0' : '') + sequenceHex;
+  sequenceHex = Buffer.from(sequenceHex,'hex').reverse().toString('hex').padEnd(16,'0');
 
   const challengeHex =
     '0000000000000000000000000000000000000000000000000000000000000001' +
     '076163636f756e74' +
     '16526f746174696f6e50726f6f664368616c6c656e6765' +
-    sequence +
+    sequenceHex +
     address.hexString.slice(2) +
     fromAccount.authKey().hexString.slice(2) +
     '20' + toAccount.pubKey().hexString.slice(2);
@@ -134,7 +108,7 @@ export async function rotateAuthKeyEd25519(address, fromAccount, toAccount) {
     ),
   );
 
-  return getSignedTransaction(fromAccount, address, sequence_number, chainId, payload);
+  return getSignedTransaction(fromAccount, address, sequence, chainId, payload);
 }
 
 /*

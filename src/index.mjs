@@ -1,55 +1,31 @@
-import { AptosClient, FaucetClient } from "aptos";
+import * as api from './utils/api.mjs';
 import { getAccounts } from './utils/account.mjs';
 import { checkKeyRotation, rotateAuthKeyEd25519 } from './utils/keyRotation.mjs';
 import { getAccountTransferPayload, getSignedTransaction } from './utils/tx.mjs';
 
-const NODE_URL = "https://fullnode.devnet.aptoslabs.com";
-const FAUCET_URL = "https://faucet.devnet.aptoslabs.com";
-
-const client = new AptosClient(NODE_URL);
-const faucetClient = new FaucetClient(NODE_URL, FAUCET_URL);
-
-async function accountBalance(accountAddress) {
-  try {
-    const resource = await client.getAccountResource(accountAddress, "0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>");
-    if (resource == null) {
-      return null;
-    }
-    return parseInt((resource.data)["coin"]["value"]);
-  } catch (error) {
-    return 'Not Exist';
-  }
-}
-
 async function transfer(authAccount, senderAddr, receiverAddr, amount) {
-  const chainId = await client.getChainId();
-  const { sequence_number } = await client.getAccount(senderAddr);
+  const chainId = await api.getChainId();
+  const { sequence } = await api.getAccount(senderAddr);
   const payload = getAccountTransferPayload(receiverAddr, amount);
-  const { signedTx } = getSignedTransaction(authAccount, senderAddr, sequence_number, chainId, payload);
-  await sendTx(signedTx);
+  const { signedTx } = getSignedTransaction(authAccount, senderAddr, sequence, chainId, payload);
+  await api.sendTx(signedTx);
 }
 
 async function rotateKey(address, fromAccount, toAccount) {
   try {
-    const chainId = await client.getChainId();
+    const chainId = await api.getChainId();
     const { signedTx } = await rotateAuthKeyEd25519(address, fromAccount, toAccount, chainId);
-    await sendTx(signedTx);
+    await api.sendTx(signedTx);
   } catch (error) {
     console.log('\n*** Key Rotation Failure ***');
     console.log(error);
   }
 }
 
-async function sendTx(bcsTxn) {
-  const pendingTxn = await client.submitSignedBCSTransaction(bcsTxn);
-  // console.log('\npendingTxn :', pendingTxn);
-  await client.waitForTransaction(pendingTxn.hash);
-}
-
 async function showBalances(alice, bob, charlie) {
-  console.log(`Alice   : ${await accountBalance(alice.address())}`);
-  console.log(`Bob     : ${await accountBalance(bob.address())}`);
-  console.log(`Charlie : ${await accountBalance(charlie.address())}`);
+  console.log(`Alice   : ${await api.accountBalance(alice.address())}`);
+  console.log(`Bob     : ${await api.accountBalance(bob.address())}`);
+  console.log(`Charlie : ${await api.accountBalance(charlie.address())}`);
 }
 
 (async ()=>{
@@ -57,7 +33,7 @@ async function showBalances(alice, bob, charlie) {
     const { alice, bob, charlie } = await getAccounts();
 
     // ** test tool 1 : faucet
-    await faucetClient.fundAccount(alice.address(), 5000);
+    await api.fundAccount(alice.address(), 5000);
 
     console.log("\n=== Initial Balances ===");
     await showBalances(alice, bob, charlie);
