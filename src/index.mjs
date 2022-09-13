@@ -39,10 +39,10 @@ async function showBalances(alice, bob, charlie) {
     await showBalances(alice, bob, charlie);
 
     // ** test tool 2 : transfer
-    await transfer(alice, alice.address(), bob.address(), 2000); // fromAuth, fromAddr, toAddr, amount
+    await transfer(bob, alice.address(), bob.address(), 2000); // fromAuth, fromAddr, toAddr, amount
 
     // ** test tool 3 : rotateKey
-    await rotateKey(alice.address(), alice, bob); // address, fromAuth, toAuth
+    // await rotateKey(alice.address(), alice, bob); // address, fromAuth, toAuth
 
     console.log("\n=== Final Balances ===");
     await showBalances(alice, bob, charlie);

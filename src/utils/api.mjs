@@ -1,6 +1,19 @@
 import { AptosClient, FaucetClient } from 'aptos';
+import BigNumber from 'bignumber.js';
 import { getAccounts } from './account.mjs';
 import { getAccountTransferPayload, getSignedTransaction } from './tx.mjs';
+
+export {
+  fundAccount,
+  accountBalance,
+  lookupAddressByAuthKey,
+  getSequenceAndAuthKey,
+  getChainId,
+  getGasPrice,
+  getGasLimit,
+  getHistory,
+  sendTx,
+};
 
 const NODE_URL = 'https://fullnode.devnet.aptoslabs.com';
 const FAUCET_URL = 'https://faucet.devnet.aptoslabs.com';
@@ -12,7 +25,13 @@ if (process.argv[1].includes('utils/api.mjs')) {
   try {
     const { alice, bob, charlie } = await getAccounts();
 
-    const oriAuth = alice.authKey().hexString;
+    const auth = bob;
+    const sender = alice.address().hexString;
+    const receiver = bob.address().hexString;
+
+    await fundAccount(sender, 6000);
+
+    const oriAuth = sender;
     console.log('\noriginalAuth :', oriAuth);
     const rotatedAddr = await lookupAddressByAuthKey(oriAuth);
     console.log('rotatedAddr  :', rotatedAddr);
@@ -21,9 +40,10 @@ if (process.argv[1].includes('utils/api.mjs')) {
     console.log('currentAuth  :', currentAuth);
     console.log('\nsequence :', sequence);
 
-
     const balance = await accountBalance(oriAuth);
     console.log('balance  :', balance);
+
+    if (!currentAuth) throw new Error('account does not exist');
 
     const chainId = await getChainId();
     console.log('chainId  :', chainId);
@@ -35,35 +55,35 @@ if (process.argv[1].includes('utils/api.mjs')) {
     // https://fullnode.devnet.aptoslabs.com/v1/spec#/operations/simulate_transaction
     // https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/e2e-testsuite/src/tests/verify_txn.rs
 
-    const auth = bob;
-    const sender = alice.address();
-    const receiver = bob.address();
-    const amount = 1000;
-    const gasLimit = '2000';
-
-    const payload = getAccountTransferPayload(receiver, amount);
-    const { signedTx } = getSignedTransaction(auth, sender, sequence, chainId, payload, gasLimit, gasPrice);
-    let fakeSignedTx = Buffer.from(signedTx).toString('hex');
-    fakeSignedTx = fakeSignedTx.slice(0,-128) + '0'.repeat(128);
-
-    const usedGas = await getGasLimit(Buffer.from(fakeSignedTx,'hex'));
-    console.log('usedGas :', usedGas);
+    const publicKey = auth.pubKey().hexString;
+    const testGasLimit = 2000;
+    const tx = {
+      sender,
+      receiver,
+      sequence,
+      amount: 1000,
+      gasLimit: testGasLimit,
+      gasPrice,
+      expiration: Math.floor(Date.now() / 1000) + 10,
+    };
+    const usedGas = await getGasLimit(tx, publicKey);
+    console.log('usedGas  :', usedGas);
 
     // History
 
     const history = await getHistory(oriAuth);
-    console.log('history :', history.map(tx=>tx.payload.function));
+    console.log('history  :', history.map(tx=>tx.payload.function));
 
   } catch (err) {
-    console.log('err :', err);
+    console.log('\nError :', err.message);
   }
 }
 
-export async function fundAccount(address, amount) {
+async function fundAccount(address, amount) {
   return faucetClient.fundAccount(address, amount);
 }
 
-export async function accountBalance(address) {
+async function accountBalance(address) {
   try {
     const resource = await client.getAccountResource(address, '0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>');
     const { value } = resource.data.coin;
@@ -73,7 +93,7 @@ export async function accountBalance(address) {
   }
 }
 
-export async function lookupAddressByAuthKey(authKey) {
+async function lookupAddressByAuthKey(authKey) {
   try {
     const resource = await client.getAccountResource('0x1', '0x1::account::OriginatingAddress');
     const { handle } = resource.data.address_map;
@@ -88,7 +108,7 @@ export async function lookupAddressByAuthKey(authKey) {
   }
 }
 
-export async function getSequenceAndAuthKey(address) {
+async function getSequenceAndAuthKey(address) {
   try {
     const {
       sequence_number: sequence,
@@ -100,32 +120,83 @@ export async function getSequenceAndAuthKey(address) {
   }
 }
 
-export async function getChainId() {
+async function getChainId() {
   return client.getChainId();
 }
 
-export async function getGasPrice() {
+async function getGasPrice() {
   const { gas_estimate } = await client.client.transactions.estimateGasPrice();
   return gas_estimate;
 }
 
-export async function getGasLimit(fakeSignedTx) {
+// estimate gas
+
+function remove0x(param) {
+  if (!param) return '';
+  const s = param.toLowerCase();
+  return s.startsWith('0x') ? s.slice(2) : s;
+}
+
+function check32BytesHex(param) {
+  const hex = remove0x(param);
+  const re = /^([0-9A-Fa-f]{2})+$/;
+  const isHex = re.test(hex);
+  const is32Bytes = hex.length === 64;
+  if (!isHex) throw new Error('invalid hex format');
+  if (!is32Bytes) throw new Error('invalid length, need 64, get', hex.length);
+  return hex;
+}
+
+function toU64Arg(param) {
+  const bn = new BigNumber(param);
+  const hex = bn.toString(16);
+  const len = Math.ceil(hex.length/2)*2;
+  return Buffer.from(hex.padStart(len, '0'),'hex').reverse().toString('hex').padEnd(16,'0');
+}
+
+function getSignedTx(tx, publicKey, sig) {
+  const { sender, sequence, receiver, amount, gasLimit, gasPrice, expiration } = tx;
+
+  let signedTx = '';
+  signedTx += check32BytesHex(sender);
+  signedTx += toU64Arg(sequence);
+  signedTx += '02';
+  signedTx += '0000000000000000000000000000000000000000000000000000000000000001';
+  signedTx += '0d6170746f735f6163636f756e74';
+  signedTx += '087472616e73666572';
+  signedTx += '000220';
+  signedTx += check32BytesHex(receiver);
+  signedTx += '08';
+  signedTx += toU64Arg(amount);
+  signedTx += toU64Arg(gasLimit);
+  signedTx += toU64Arg(gasPrice);
+  signedTx += toU64Arg(expiration);
+  signedTx += '1b'; // chainId
+  signedTx += '0020';
+  signedTx += check32BytesHex(publicKey);
+  signedTx += '40';
+  signedTx += remove0x(sig) ? remove0x(sig) : '0'.repeat(128);
+  return signedTx;
+}
+
+async function getGasLimit(tx, publicKey) {
   try {
-    const res = await client.submitBCSSimulation(fakeSignedTx);
+    const fakeSignedTx = getSignedTx(tx, publicKey);
+    const res = await client.submitBCSSimulation(Buffer.from(fakeSignedTx,'hex'));
     const result = res[0];
     if (!result.success) throw new Error(result.vm_status);
     return result.gas_used;
   } catch (error) {
-    return error.message;
+    return error;
   }
 }
 
-export async function getHistory(address) {
+async function getHistory(address) {
   const transactions = await client.client.transactions.getAccountTransactions(address);
   return transactions;
 }
 
-export async function sendTx(bcsTxn) {
+async function sendTx(bcsTxn) {
   const pendingTxn = await client.submitSignedBCSTransaction(bcsTxn);
   await client.waitForTransaction(pendingTxn.hash);
 }

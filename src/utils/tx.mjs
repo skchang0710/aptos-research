@@ -25,18 +25,6 @@ if (process.argv[1].includes('utils/tx.mjs')) {
     const payload = getAccountTransferPayload(receiverAddr, amount);
     const { rawTx, signedTx } = getSignedTransaction(authAccount, senderAddr, sequence, chainId, payload);
 
-    const rawTxHex = Buffer.from(BCS.bcsToBytes(rawTx)).toString('hex');
-    const signedTxHex = Buffer.from(signedTx).toString('hex');
-
-    // https://github.com/aptos-labs/aptos-core/blob/main/ecosystem/typescript/sdk/src/transaction_builder/builder.ts#L67
-    const prefixArray = new Uint8Array(sha3_256.create().update(RAW_TRANSACTION_SALT).arrayBuffer());
-    const prefix = Buffer.from(prefixArray).toString('hex');
-    console.log('\nrawTxHex :', rawTxHex);
-    console.log(rawTxFormat(prefix+rawTxHex));
-
-    console.log('\nsignedTxHex :', signedTxHex);
-    console.log(signedTxFormat(signedTxHex));
-
   } catch (err) {
     console.log('err :', err);
   }
@@ -113,6 +101,17 @@ export function getSignedTransaction(authAccount, senderAddr, sequence, chainId,
     BigInt(Math.floor(Date.now() / 1000) + 10), // expiration
     new TxnBuilderTypes.ChainId(chainId),       // chain id
   );
+
+  // Raw Tx : https://github.com/aptos-labs/aptos-core/blob/main/ecosystem/typescript/sdk/src/transaction_builder/builder.ts#L67
+  // const prefixArray = new Uint8Array(sha3_256.create().update(RAW_TRANSACTION_SALT).arrayBuffer());
+  // const prefix = Buffer.from(prefixArray).toString('hex');
+  // const rawTxHex = Buffer.from(BCS.bcsToBytes(rawTx)).toString('hex');
+  // console.log(rawTxFormat(prefix+rawTxHex));
+
+  // Signed Tx
+
   const signedTx = AptosClient.generateBCSTransaction(authAccount, rawTx);
+  const signedTxHex = Buffer.from(signedTx).toString('hex');
+  console.log(signedTxFormat(signedTxHex));
   return { rawTx, signedTx };
 }
