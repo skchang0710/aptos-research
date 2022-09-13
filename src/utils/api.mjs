@@ -137,13 +137,13 @@ function remove0x(param) {
   return s.startsWith('0x') ? s.slice(2) : s;
 }
 
-function check32BytesHex(param) {
+function checkHex(param, length) {
   const hex = remove0x(param);
   const re = /^([0-9A-Fa-f]{2})+$/;
   const isHex = re.test(hex);
-  const is32Bytes = hex.length === 64;
+  const validLength = hex.length === length;
   if (!isHex) throw new Error('invalid hex format');
-  if (!is32Bytes) throw new Error('invalid length, need 64, get', hex.length);
+  if (!validLength) throw new Error(`invalid length, need ${length}, get ${hex.length}`);
   return hex;
 }
 
@@ -158,14 +158,14 @@ function getSignedTx(tx, publicKey, sig) {
   const { sender, sequence, receiver, amount, gasLimit, gasPrice, expiration } = tx;
 
   let signedTx = '';
-  signedTx += check32BytesHex(sender);
+  signedTx += checkHex(sender, 64);
   signedTx += toU64Arg(sequence);
   signedTx += '02';
   signedTx += '0000000000000000000000000000000000000000000000000000000000000001';
   signedTx += '0d6170746f735f6163636f756e74';
   signedTx += '087472616e73666572';
   signedTx += '000220';
-  signedTx += check32BytesHex(receiver);
+  signedTx += checkHex(receiver, 64);
   signedTx += '08';
   signedTx += toU64Arg(amount);
   signedTx += toU64Arg(gasLimit);
@@ -173,9 +173,9 @@ function getSignedTx(tx, publicKey, sig) {
   signedTx += toU64Arg(expiration);
   signedTx += '1b'; // chainId
   signedTx += '0020';
-  signedTx += check32BytesHex(publicKey);
+  signedTx += checkHex(publicKey, 64);
   signedTx += '40';
-  signedTx += remove0x(sig) ? remove0x(sig) : '0'.repeat(128);
+  signedTx += sig ? checkHex(sig, 128) : '0'.repeat(128);
   return signedTx;
 }
 
