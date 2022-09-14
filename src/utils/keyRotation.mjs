@@ -37,25 +37,26 @@ export async function checkKeyRotation(account) {
   // 前提 : 一個 AuthKey 能夠對應到最多兩個 Address，一是他原本自己的，二是別的帳號 Rotate 給它的。
   //
   // (0) currentAuth 不存在          : 此地址沒有做過 Create Account。
-  // (1) originalAuth == currentAuth : 沒有做過 Key Rotation，此帳號的 AuthKey 可正常使用原本的 Address。
-  // (2) originalAuth != currentAuth : 已經做過 Key Rotation，此帳號的 AuthKey 不能再使用原本的 Address。
-  // (3) rotatedAddr 不存在          : 此帳號的 AuthKey 沒有 Rotate 給新的 Address。
-  // (4) rotatedAddr 存在            : 此帳號的 AuthKey 已經 Rotate 給新的 Address。
+  // (1) originalAuth == currentAuth : 此 AuthKey 沒有做過 Key Rotation，可正常使用原本的 Address。
+  // (2) originalAuth != currentAuth : 此 AuthKey 已經做過 Key Rotation，不能再使用原本的 Address。
+  // (3) rotatedAddr 不存在          : 此 AuthKey 沒有接收新的 Address。
+  // (4) originalAuth != rotatedAddr : 此 AuthKey 已經接收新的 Address。
+  // (5) originalAuth == rotatedAddr : 此 AuthKey 已經接收回原本的 Address。
   //
   // 狀況 :
   //
-  // (0,2+3) 此 AuthKey 不能使用。
-  // (1+3)   此 AuthKey 只能使用原本的 Address。
-  // (2+4)   此 AuthKey 只能使用新的 Address。
-  // (1+4)   此 AuthKey 能使用原本及新的兩個 Address。
+  // 0       此 AuthKey 沒有做過 Create Account, 不能使用。
+  // 2+3     此 AuthKey 不能使用。
+  // 1+3|5   此 AuthKey 只能使用原本的 Address。
+  // 2+4     此 AuthKey 只能使用新的 Address。
+  // 1+4     此 AuthKey 能使用原本及新的兩個 Address。
   //
-  // Bug? : 
-  //
-  // A B 帳號互相 rotate 以後，B 帳號 lookupAddressByAuthKey 會 Not Found，但確實能用 B AuthKey 做 A Address 的交易。
+  // 已修正 Bug : A B 帳號互相 rotate 以後，B 帳號 lookupAddressByAuthKey 會 Not Found，但確實能用 B AuthKey 做 A Address 的交易。
 
   const hasOldAddress = originalAuth === currentAuth;
-  const hasNewAddress = rotatedAddr !== '';
+  const hasNewAddress = rotatedAddr !== '' && rotatedAddr !== originalAuth;
   let result = '';
+  if (!currentAuth) result = '此 AuthKey 沒有做過 Create Account, 不能使用。';
   if (!hasOldAddress && !hasNewAddress) result = '此 AuthKey 不能使用。';
   if (hasOldAddress && !hasNewAddress) result = '此 AuthKey 只能使用原本的 Address。';
   if (!hasOldAddress && hasNewAddress) result = '此 AuthKey 只能使用新的 Address。';
