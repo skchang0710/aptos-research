@@ -53,6 +53,7 @@ if (process.argv[1].includes('utils/api.mjs')) {
 
     // Submit BCS Simulation : Create a SignedTransaction with a zero-padded signature.
     // https://fullnode.devnet.aptoslabs.com/v1/spec#/operations/simulate_transaction
+    // https://github.com/aptos-labs/aptos-core/blob/main/ecosystem/typescript/sdk/src/aptos_client.ts#L360
     // https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/e2e-testsuite/src/tests/verify_txn.rs
 
     const publicKey = auth.pubKey().hexString;
