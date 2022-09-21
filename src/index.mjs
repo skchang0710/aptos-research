@@ -6,9 +6,10 @@ import { getAccountTransferPayload, getSignedTransaction } from './utils/tx.mjs'
 async function transfer(authAccount, senderAddr, receiverAddr, amount) {
   const chainId = await api.getChainId();
   const { sequence } = await api.getSequenceAndAuthKey(senderAddr);
+  const gasPrice = await api.getGasPrice();
   const payload = getAccountTransferPayload(receiverAddr, amount);
-  const { signedTx } = getSignedTransaction(authAccount, senderAddr, sequence, chainId, payload);
-  await api.sendTx(signedTx);
+  const { signedTx } = getSignedTransaction(authAccount, senderAddr, sequence, chainId, payload, 2000, gasPrice);
+  return api.sendTx(signedTx);
 }
 
 async function rotateKey(address, fromAccount, toAccount) {
@@ -33,13 +34,14 @@ async function showBalances(alice, bob, charlie) {
     const { alice, bob, charlie } = await getAccounts();
 
     // ** test tool 1 : faucet
-    await api.fundAccount(alice.address(), 5000);
+    await api.fundAccount(alice.address(), 500000);
 
     console.log("\n=== Initial Balances ===");
     await showBalances(alice, bob, charlie);
 
     // ** test tool 2 : transfer
-    await transfer(bob, alice.address(), bob.address(), 2000); // fromAuth, fromAddr, toAddr, amount
+    const txId = await transfer(alice, alice.address(), bob.address(), 2000); // fromAuth, fromAddr, toAddr, amount
+    console.log('txId :', txId);
 
     // ** test tool 3 : rotateKey
     // await rotateKey(alice.address(), alice, bob); // address, fromAuth, toAuth

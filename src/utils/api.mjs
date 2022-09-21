@@ -200,4 +200,5 @@ async function getHistory(address) {
 async function sendTx(bcsTxn) {
   const pendingTxn = await client.submitSignedBCSTransaction(bcsTxn);
   await client.waitForTransaction(pendingTxn.hash);
+  return pendingTxn.hash;
 }
