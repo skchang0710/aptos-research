@@ -148,19 +148,22 @@ function checkHex(param, length) {
   return hex;
 }
 
-function toU64Arg(param) {
+function toUintArg(param, byteLen) {
+  if (!param) {
+    param = '0';
+  }
   const bn = new BigNumber(param);
   const hex = bn.toString(16);
-  const len = Math.ceil(hex.length/2)*2;
-  return Buffer.from(hex.padStart(len, '0'),'hex').reverse().toString('hex').padEnd(16,'0');
+  const len = Math.ceil(hex.length / 2) * 2;
+  return Buffer.from(hex.padStart(len, '0'),'hex').reverse().toString('hex').padEnd(byteLen * 2, '0');
 }
 
 function getSignedTx(tx, publicKey, sig) {
-  const { sender, sequence, receiver, amount, gasLimit, gasPrice, expiration } = tx;
+  const { sender, sequence, receiver, amount, gasLimit, gasPrice, expiration, chainId } = tx;
 
   let signedTx = '';
   signedTx += checkHex(sender, 64);
-  signedTx += toU64Arg(sequence);
+  signedTx += toUintArg(sequence, 8);
   signedTx += '02';
   signedTx += '0000000000000000000000000000000000000000000000000000000000000001';
   signedTx += '0d6170746f735f6163636f756e74';
@@ -168,11 +171,11 @@ function getSignedTx(tx, publicKey, sig) {
   signedTx += '000220';
   signedTx += checkHex(receiver, 64);
   signedTx += '08';
-  signedTx += toU64Arg(amount);
-  signedTx += toU64Arg(gasLimit);
-  signedTx += toU64Arg(gasPrice);
-  signedTx += toU64Arg(expiration);
-  signedTx += '1b'; // chainId
+  signedTx += toUintArg(amount, 8);
+  signedTx += toUintArg(gasLimit, 8);
+  signedTx += toUintArg(gasPrice, 8);
+  signedTx += toUintArg(expiration, 8);
+  signedTx += toUintArg(chainId, 1)
   signedTx += '0020';
   signedTx += checkHex(publicKey, 64);
   signedTx += '40';

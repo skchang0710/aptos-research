@@ -16,14 +16,20 @@ if (process.argv[1].includes('utils/tx.mjs')) {
     const { alice, bob, charlie } = await getAccounts();
 
     const authAccount = alice;
-    const senderAddr = bob.address();
-    const receiverAddr = alice.address();
-    const amount = 1000;
-    const sequence = 0;
-    const chainId = 25;
 
-    const payload = getAccountTransferPayload(receiverAddr, amount);
-    const { rawTx, signedTx } = getSignedTransaction(authAccount, senderAddr, sequence, chainId, payload);
+    const tx = {
+      sender: alice.address(),
+      sequence: 0,
+      receiver: bob.address(),
+      amount: 1000,
+      gasLimit: 2000,
+      gasPrice: 10,
+      expiration: Math.floor(Date.now() / 1000) + 10,
+      chainId: 25,
+    };
+
+    const payload = getAccountTransferPayload(tx.receiver, tx.amount);
+    const { rawTx, signedTx } = getSignedTransaction(tx, payload, authAccount);
 
   } catch (err) {
     console.log('err :', err);
@@ -91,15 +97,16 @@ export function getAccountTransferPayload(receiverAddr, amount) {
 
 // -------- -------- -------- Construct Transaction -------- -------- -------- //
 
-export function getSignedTransaction(authAccount, senderAddr, sequence, chainId, payload, gasLimit=1000, gasPrice=1) {
+export function getSignedTransaction(tx, payload, authAccount) {
+  const { sender, sequence, receiver, amount, gasLimit, gasPrice, expiration, chainId } = tx;
   const rawTx = new TxnBuilderTypes.RawTransaction(
-    TxnBuilderTypes.AccountAddress.fromHex(senderAddr),
+    TxnBuilderTypes.AccountAddress.fromHex(sender),
     BigInt(sequence),
     payload,
     gasLimit,
     gasPrice,
-    BigInt(Math.floor(Date.now() / 1000) + 10), // expiration
-    new TxnBuilderTypes.ChainId(chainId),       // chain id
+    BigInt(expiration),
+    new TxnBuilderTypes.ChainId(chainId),
   );
 
   // Raw Tx : https://github.com/aptos-labs/aptos-core/blob/main/ecosystem/typescript/sdk/src/transaction_builder/builder.ts#L67

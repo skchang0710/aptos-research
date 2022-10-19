@@ -4,11 +4,29 @@ import { checkKeyRotation, rotateAuthKeyEd25519 } from './utils/keyRotation.mjs'
 import { getAccountTransferPayload, getSignedTransaction } from './utils/tx.mjs';
 
 async function transfer(authAccount, senderAddr, receiverAddr, amount) {
+
   const chainId = await api.getChainId();
   const { sequence } = await api.getSequenceAndAuthKey(senderAddr);
   const gasPrice = await api.getGasPrice();
+
+  const tx = {
+    sender: senderAddr.hexString,
+    sequence,
+    receiver: receiverAddr.hexString,
+    amount,
+    gasLimit: 2000,
+    gasPrice,
+    expiration: Math.floor(Date.now() / 1000) + 10,
+    chainId,
+  };
+  console.log('\ntx :', tx);
+  const publicKey = Buffer.from(authAccount.signingKey.publicKey).toString('hex');
+
+  const gasLimit = await api.getGasLimit(tx, publicKey);
+  console.log('gasLimit :', gasLimit);
+
   const payload = getAccountTransferPayload(receiverAddr, amount);
-  const { signedTx } = getSignedTransaction(authAccount, senderAddr, sequence, chainId, payload, 2000, gasPrice);
+  const { signedTx } = getSignedTransaction({ ...tx, gasLimit }, payload, authAccount);
   return api.sendTx(signedTx);
 }
 
