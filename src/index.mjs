@@ -9,7 +9,7 @@ async function transfer(authAccount, senderAddr, receiverAddr, amount) {
   const { sequence } = await api.getSequenceAndAuthKey(senderAddr);
   const gasPrice = await api.getGasPrice();
 
-  const tx = {
+  let tx = {
     sender: senderAddr.hexString,
     sequence,
     receiver: receiverAddr.hexString,
@@ -23,11 +23,13 @@ async function transfer(authAccount, senderAddr, receiverAddr, amount) {
   const publicKey = Buffer.from(authAccount.signingKey.publicKey).toString('hex');
 
   const gasLimit = await api.getGasLimit(tx, publicKey);
-  console.log('gasLimit :', gasLimit);
+  console.log('estimated gasLimit :', gasLimit);
+
+  // tx.gasLimit = gasLimit;
 
   const payload = getAccountTransferPayload(receiverAddr, amount);
-  const { signedTx } = getSignedTransaction({ ...tx, gasLimit }, payload, authAccount);
-  return api.sendTx(signedTx);
+  const { signedTx } = getSignedTransaction(tx, payload, authAccount);
+  return ''; // api.sendTx(signedTx);
 }
 
 async function rotateKey(address, fromAccount, toAccount) {
